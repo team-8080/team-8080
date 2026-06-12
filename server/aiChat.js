@@ -7,7 +7,7 @@ const cron = require('node-cron');
 
 // Gemini 클라이언트 초기화 (.env 의 GEMINI_API_KEY 사용)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const MODEL_NAME = 'gemini-2.0-flash';
+const MODEL_NAME = 'gemini-2.5-flash';
 
 // 서버 시작 시 키가 제대로 로드됐는지 확인 (실제 키 값은 노출 안 함)
 console.log(

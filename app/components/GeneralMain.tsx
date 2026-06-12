@@ -28,12 +28,13 @@ type Medicine = {
 };
 
 export default function HomeScreen() {
-  const [currentTab, setCurrentTab] = useState('복약현황');
   const [dateStr, setDateStr] = useState('');
   const [timeStr, setTimeStr] = useState('');
   const [historyVisible, setHistoryVisible] = useState(false);
 
   const [nextMedicine, setNextMedicine] = useState<Medicine | null>(null);
+  // 🌟 추가: 전체 약 목록을 담을 상태
+  const [allMedicines, setAllMedicines] = useState<Medicine[]>([]);
   const [medLoading, setMedLoading] = useState(true);
 
   const managedUsers = useManagedUsers();
@@ -41,9 +42,9 @@ export default function HomeScreen() {
   
   useAlertListener();
 
-  // ★ [수정됨] 시간 업데이트 및 약 정보 실시간 갱신 (10초 주기 통합)
+  // 시간 업데이트 및 약 정보 실시간 갱신 (10초 주기)
   useEffect(() => {
-    const fetchNextMedicine = async () => {
+    const fetchMedicines = async () => {
       try {
         let savedUserId = await AsyncStorage.getItem('userId');
         if (!savedUserId && auth.currentUser) {
@@ -60,44 +61,42 @@ export default function HomeScreen() {
         
         if (medicines.length === 0) {
           setNextMedicine(null);
+          setAllMedicines([]);
           return;
         }
 
         const now = new Date();
         const currentTimeString = now.toTimeString().split(' ')[0]; 
         const sortedMeds = [...medicines].sort((a, b) => a.alarmTime.localeCompare(b.alarmTime));
-        const upcomingMed = sortedMeds.find((med) => med.alarmTime > currentTimeString);
+        
+        // 🌟 전체 약 목록 저장
+        setAllMedicines(sortedMeds);
 
+        const upcomingMed = sortedMeds.find((med) => med.alarmTime > currentTimeString);
         setNextMedicine(upcomingMed || sortedMeds[0]); // 오늘 남은 약이 없으면 내일 첫 약
       } catch (error) {
-        console.error("다음 약 계산 실패:", error);
+        console.error("약 데이터 불러오기 실패:", error);
       } finally {
-        setMedLoading(false); // 로딩 스피너는 최초 1회만 끄고 이후엔 조용히 갱신
+        setMedLoading(false);
       }
     };
 
     const updateTimeAndData = () => {
-      // 1. 현재 시간 갱신
       const now = new Date();
       const date = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일`;
       const time = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
       setDateStr(date);
       setTimeStr(time);
 
-      // 2. 서버에서 약 목록 재조회 및 계산
-      fetchNextMedicine();
+      fetchMedicines();
     };
 
-    // 화면 켜질 때 1번 즉시 실행
     updateTimeAndData();
-
-    // 이후 10초(1000 * 10)마다 계속 반복
     const timer = setInterval(updateTimeAndData, 1000 * 10);
     
     return () => clearInterval(timer);
   }, []);
 
-  // 알림 기록 핸들러 
   const handlePressBell = async () => {
     if (managedUsers && managedUsers.length > 0) {
       setHistoryVisible(true);
@@ -162,24 +161,34 @@ export default function HomeScreen() {
           )}
         </View>
 
-        <View style={styles.segmentContainer}>
-          {['복약현황', '재고확인', '알림내역'].map((tab) => (
-            <TouchableOpacity 
-              key={tab}
-              style={[styles.segmentButton, currentTab === tab && styles.activeSegment]}
-              onPress={() => setCurrentTab(tab)}
-            >
-              <Text style={[styles.segmentText, currentTab === tab && styles.activeSegmentText]}>{tab}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* 🌟 탭 버튼 삭제 및 DB 기반 리스트로 교체 */}
+        <View style={[styles.statusSection, { marginTop: 20 }]}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 5, color: '#333' }}>
+            📋 오늘의 복약 일정
+          </Text>
 
-        {currentTab === '복약현황' && (
-          <View style={styles.statusSection}>
-            <MedRow name="아스피린" time="08:00" isDone={true} />
-            <MedRow name="비타민 C" time="09:00" isDone={false} isLate={true} />
-          </View>
-        )}
+          {allMedicines.length === 0 ? (
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              <Text style={{ color: '#999' }}>등록된 일정이 없습니다.</Text>
+            </View>
+          ) : (
+            allMedicines.map((med) => {
+              // 현재 시간과 약 알람 시간을 비교하여 지났는지 판단
+              const nowTime = new Date().toTimeString().split(' ')[0];
+              const isPassed = med.alarmTime < nowTime;
+
+              return (
+                <MedRow 
+                  key={med.id}
+                  name={med.medicineName} 
+                  time={med.alarmTime.substring(0, 5)} 
+                  isDone={false} // 복용 로그 연동 전이므로 기본값 false
+                  isLate={isPassed} // 시간이 지났으면 빨간색 경고
+                />
+              );
+            })
+          )}
+        </View>
       </ScrollView>
 
       {/* --- 가족 메시지 전송 기록 모달 --- */}

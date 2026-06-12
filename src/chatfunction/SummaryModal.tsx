@@ -5,21 +5,17 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Modal,
-    Platform,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { auth } from '../../firebaseConfig';
 import { summaryStyles as styles } from '../../styles/summaryStyles';
 
-const SERVER_URL =
-  Platform.OS === 'android'
-    ? 'http://192.168.45.199:3000'
-    : 'http://localhost:3000';
+const SERVER_URL = process.env.EXPO_PUBLIC_API_URL
 
 interface Summary {
   summaryDate: string;

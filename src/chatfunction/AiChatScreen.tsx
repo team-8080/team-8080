@@ -4,24 +4,21 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { auth } from '../../firebaseConfig';
 import { aiChatStyles as styles } from '../../styles/aiChatStyles';
 
 // login.tsx 와 동일한 서버 주소 규칙
-const SERVER_URL =
-  Platform.OS === 'android'
-    ? 'http://192.168.45.199:3000'
-    : 'http://localhost:3000';
+const SERVER_URL = process.env.EXPO_PUBLIC_API_URL
 
 interface Message {
   role: 'user' | 'model';

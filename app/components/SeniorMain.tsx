@@ -67,7 +67,7 @@ export default function SeniorHomeScreen() {
     getPhone();
   }, []);
 
-  // ★ 3. [수정됨] 시간 업데이트 및 약 정보 실시간 갱신 (10초 주기 통합)
+  // 3. 시간 업데이트 및 약 정보 실시간 갱신 (10초 주기 통합)
   useEffect(() => {
     const fetchNextMedicine = async () => {
       try {
@@ -172,13 +172,14 @@ export default function SeniorHomeScreen() {
         </View>
       </View>
 
-      {/* ★ 복약 정보 카드 */}
-      <View style={styles.infoCard}>
+      {/* ★ 복약 정보 카드 (디자인 수정됨) */}
+      <View style={[styles.infoCard, { justifyContent: 'center', paddingVertical: 20 }]}>
         {medLoading ? (
           <ActivityIndicator size="large" color="#1A73E8" style={{ marginTop: 40 }} />
         ) : nextMedicine ? (
           <>
-            <View style={styles.cardHeader}>
+            {/* 1. 상단 시간 및 약 이름 (여백 축소) */}
+            <View style={[styles.cardHeader, { marginBottom: 5 }]}>
               <Text style={styles.labelLarge}>
                 ⏰ {nextMedicine.alarmTime.substring(0, 5)}
               </Text>
@@ -186,17 +187,94 @@ export default function SeniorHomeScreen() {
                 <Text style={styles.medicineName}>{nextMedicine.medicineName}</Text>
               </View>
             </View>
-            <View style={styles.pillCountContainer}>
-              <Text style={styles.pillCount}>
+
+            {/* 2. 중앙 번호 및 텍스트 (위아래 여백 조임) */}
+            <View style={[styles.pillCountContainer, { marginVertical: 10, alignItems: 'center' }]}>
+              <Text style={[styles.pillCount, { marginBottom: -5 }]}>
                 {nextMedicine.pillboxNumber < 10 ? `0${nextMedicine.pillboxNumber}` : nextMedicine.pillboxNumber}
               </Text>
               <Text style={styles.unitText}>번 칸 열기</Text>
             </View>
+
+            {/* 🌟 3. 새롭게 추가된 큼직한 [복약 완료] 버튼 */}
+            <TouchableOpacity 
+              style={{
+                backgroundColor: '#1A73E8',
+                paddingVertical: 18,
+                borderRadius: 15,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                marginTop: 15,
+                marginHorizontal: 15,
+                elevation: 3, 
+                shadowColor: '#000', 
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+              }}
+              activeOpacity={0.8}
+onPress={() => {
+                // 1. 현재 시간과 알람 시간(분 단위)으로 변환해서 비교
+                const now = new Date();
+                const currentMins = now.getHours() * 60 + now.getMinutes();
+                
+                const [alarmHour, alarmMinute] = nextMedicine.alarmTime.split(':').map(Number);
+                const alarmMins = alarmHour * 60 + alarmMinute;
+
+                // 2. 시간 차이 계산 (예: 앞뒤 30분 이내면 제시간으로 인정)
+                const diffMins = Math.abs(currentMins - alarmMins);
+                const isRightTime = diffMins <= 30; // 허용 오차 30분
+
+                // 3. 서버에 기록하는 공통 함수
+                const sendIntakeLog = async () => {
+                  try {
+                    const user = auth.currentUser;
+                    if (!user) return;
+
+                    const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+                    
+                    await axios.post(`${baseUrl}/api/medicines/intake`, {
+                      scheduleId: nextMedicine.id, 
+                      intakeStatus: 'taken',
+                      userPk: user.uid // 🌟 추가됨: 누가 먹었는지 DB에 알려주기 위한 UID
+                    });
+
+                    Alert.alert('완료', '참 잘하셨습니다! 보호자에게 전달되었습니다.');
+                  } catch (error) {
+                    console.error('복약 기록 실패:', error);
+                    Alert.alert('오류', '기록을 저장하는 중 문제가 발생했습니다.');
+                  }
+                };
+
+                // 4. 시간에 따라 다른 알림창 띄우기
+                if (isRightTime) {
+                  // 제시간일 때
+                  Alert.alert('복약 확인', '약을 모두 드셨습니까?', [
+                    { text: '아직이요', style: 'cancel' },
+                    { text: '먹었어요!', onPress: sendIntakeLog }
+                  ]);
+                } else {
+                  // 시간이 아닐 때 (너무 빠르거나 늦었을 때)
+                  Alert.alert('알림', '복약 시간이 아닙니다. 드시겠습니까?', [
+                    { text: '취소', style: 'cancel' },
+                    { text: '네', onPress: sendIntakeLog }
+                  ]);
+                }
+              }}
+            >
+              <MaterialCommunityIcons name="check-circle" size={26} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 'bold' }}>
+                복약 완료
+              </Text>
+            </TouchableOpacity>
           </>
         ) : (
-          <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-            <MaterialCommunityIcons name="check-circle-outline" size={50} color="#9E9E9E" />
-            <Text style={{ marginTop: 10, fontSize: 18, color: '#9E9E9E' }}>등록된 약이 없습니다.</Text>
+          <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1, paddingVertical: 30 }}>
+            <MaterialCommunityIcons name="emoticon-happy-outline" size={60} color="#9E9E9E" />
+            <Text style={{ marginTop: 15, fontSize: 20, color: '#666', fontWeight: 'bold' }}>
+              오늘 약을 모두 드셨습니다!
+            </Text>
           </View>
         )}
       </View>

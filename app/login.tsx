@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 
 // 서버 주소 설정 (에뮬레이터 환경 대응)
-const SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.45.70:3000';
+const SERVER_URL = process.env.EXPO_PUBLIC_API_URL
 
 export default function AuthScreen() {
   const [isLoginMode, setIsLoginMode] = useState(true);
