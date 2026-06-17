@@ -2,6 +2,9 @@
 
 
 <div align="center">
+  <br>
+  <img src="./images/로고.png" alt="로고" width="800" />
+</div>
   <h1>💊 지켜약 </h1>
   <p><b>AI 기반 IoT 스마트 약통 연동 맞춤 케어 서비스</b></p>
   <br>
