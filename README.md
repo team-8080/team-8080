@@ -76,7 +76,7 @@
 ### 데이터베이스 ERD (Database ERD)
 <div align="center">
   <br>
-  <img src="./images/ERD.jpg" alt="데이터베이스 ERD" width="800" />
+  <img src="./images/ERD.png" alt="데이터베이스 ERD" width="800" />
 </div>
 
 ---
