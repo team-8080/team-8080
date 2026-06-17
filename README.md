@@ -9,7 +9,7 @@
 
 ---
 
-## 📢 1. 프로젝트 개요 (Overview)
+## 📢 1. 프로젝트 개요
 
 **지켜약**은 고령화 시대에 어르신들의 낮은 복약 순응도 문제를 해결하기 위해 기획된 올인원 시니어 케어 플랫폼입니다. AI와 IoT 기술을 융합하여 안전한 복약 케어를 구현하는 것이 핵심입니다.
 
@@ -24,7 +24,7 @@
 
 ---
 
-## ✨ 2. 핵심 기능 (Key Features)
+## ✨ 2. 핵심 기능
 
 <div align="center">
   <img src="./images/핵심기능.png" alt="지켜약 핵심 기능 구성도" width="800" />
@@ -44,11 +44,11 @@
 
 ---
 
-## 💡 3. 경쟁 서비스 분석 (Competitive Analysis)
+## 💡 3. 경쟁 서비스 분석
 
 기존 복약 알림 시스템의 한계를 극복하고, 자동화된 맞춤 관리를 제공합니다.
 
-| 비교 항목 | 기존 시스템 (복약복약, 건강안전 보이스케어) | **지켜약 (Jikyeoyak)** |
+| 비교 항목 | 기존 시스템 (복약복약, 건강안전 보이스케어) | **지켜약** |
 | :--- | :--- | :--- |
 | **복약 확인** | 수동 입력 | **센서 자동인식** |
 | **알림 방식** | 단순 알림 | **단계적 대응 시스템** |
@@ -61,7 +61,7 @@
 
 ## 🛠 4. 시스템 아키텍처 및 DB 설계 (Architecture & ERD)
 
-### 시스템 구성도 (System Architecture)
+### 시스템 구성도 
 <div align="center">
   <img src="./images/기술스택.png" alt="시스템 구성도" width="800" />
 </div>
@@ -73,7 +73,7 @@
 * **AI & Vision:** Gemini API, TensorFlow, YOLOv8
 * **Hardware (IoT):** Arduino, Bluetooth
 
-### 데이터베이스 ERD (Database ERD)
+### 데이터베이스 ERD 
 <div align="center">
   <br>
   <img src="./images/ERD.png" alt="데이터베이스 ERD" width="800" />
