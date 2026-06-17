@@ -73,6 +73,8 @@
 * **AI & Vision:** Gemini API, TensorFlow, YOLOv8
 * **Hardware (IoT):** Arduino, Bluetooth
 
+- [**하드웨어 설계 및 모듈 명세서**](./hardware/README.md)
+
 ### 데이터베이스 ERD 
 <div align="center">
   <br>
