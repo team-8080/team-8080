@@ -99,8 +99,3 @@
   <img src="./images/팀원.png" alt="팀원 소개" width="800" />
 </div>
 <br>
-
-
-<div align="center">
-  <i>이 프로젝트는 동양미래대학교 소프트웨어 전공 프로젝트의 일환으로 제작되었습니다.</i>
-</div>
