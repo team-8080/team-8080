@@ -3,7 +3,9 @@
 스마트 약통 하드웨어의 모듈 구성 및 회로 연결 사양입니다. 본 기기는 ESP32-C3 메인 컨트롤러를 중심으로 복약 감지 센서 및 알림 모듈이 유기적으로 통합되어 작동합니다.
 
 ## 1. 하드웨어 모듈 구성도
-![Hardware Modules](../images/모듈.jpg)
+<div align="center">
+  <img src="../images/모듈.jpg" alt="하드웨어 모듈 구성도" width="600" />
+</div>
 
 ## 2. 주요 부품 명세 (BOM - Bill of Materials)
 | 부품명 | 역할 및 기능 | 비고 |
