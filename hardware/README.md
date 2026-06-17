@@ -4,7 +4,7 @@
 
 ## 1. 하드웨어 모듈 구성도
 <div align="center">
-  <img src="../images/모듈.jpg" alt="하드웨어 모듈 구성도" width="600" />
+  <img src="../images/모듈.png" alt="하드웨어 모듈 구성도" width="600" />
 </div>
 
 ## 2. 주요 부품 명세 (BOM - Bill of Materials)
