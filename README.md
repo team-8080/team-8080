@@ -27,7 +27,7 @@
 ## ✨ 2. 핵심 기능 (Key Features)
 
 <div align="center">
-  <img src="./핵심기능.png" alt="지켜약 핵심 기능 구성도" width="800" />
+  <img src="./images/핵심기능.png" alt="지켜약 핵심 기능 구성도" width="800" />
 </div>
 <br>
 
@@ -63,7 +63,7 @@
 
 ### 시스템 구성도 (System Architecture)
 <div align="center">
-  <img src="./기술스택.png" alt="시스템 구성도" width="800" />
+  <img src="./images/기술스택.png" alt="시스템 구성도" width="800" />
 </div>
 <br>
 
@@ -96,7 +96,7 @@
 ## 👥 6. 팀원 소개 (Team :8080)
 
 <div align="center">
-  <img src="./팀원.png" alt="팀원 소개" width="800" />
+  <img src="./images/팀원.png" alt="팀원 소개" width="800" />
 </div>
 <br>
 
