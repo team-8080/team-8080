@@ -2,7 +2,7 @@
 
 
 <div align="center">
-  <h1>💊 지켜약 (Jikyeoyak)</h1>
+  <h1>💊 지켜약 </h1>
   <p><b>AI 기반 IoT 스마트 약통 연동 맞춤 케어 서비스</b></p>
   <br>
 </div>
