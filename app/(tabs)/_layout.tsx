@@ -8,7 +8,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Tabs } from 'expo-router';
-// 🌟 추가: onAuthStateChanged 임포트
 import { onAuthStateChanged } from 'firebase/auth';
 import { onValue, ref } from 'firebase/database';
 import { useEffect, useState } from 'react';
@@ -22,16 +21,14 @@ export default function TabLayout() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [hasSenior, setHasSenior] = useState(false);
 
-  // 🌟 수정: Firebase 인증 상태를 안전하게 기다렸다가 감시
+  // Firebase 인증 상태를 안전하게 기다렸다가 감시
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      // AsyncStorage에서 먼저 가져와보고, 없으면 파이어베이스 user.uid 사용
       let uid = await AsyncStorage.getItem('userId');
       if (!uid && user) {
         uid = user.uid;
       }
 
-      // 유저 정보가 확실히 로딩되었을 때만 실행!
       if (uid) {
         // 1. 잠금 상태 감시
         const lockRef = ref(db, `users/${uid}/settings/isLocked`);
@@ -42,22 +39,20 @@ export default function TabLayout() {
       }
     });
 
-    return () => unsubscribeAuth(); // 컴포넌트 꺼질 때 감시 종료
+    return () => unsubscribeAuth();
   }, []);
 
-const checkUserStatus = async (uid: string) => {
+  const checkUserStatus = async (uid: string) => {
     try {
       const baseUrl = process.env.EXPO_PUBLIC_API_URL;
       console.log(`🧐 [DB 직접 조회] 어르신 연결 여부 묻기 (대상 UID: ${uid})`);
       
-      // 🌟 핵심: AsyncStorage의 role 값을 믿지 않고 무조건 백엔드에 찔러봅니다.
       const response = await axios.get(`${baseUrl}/api/relation/check/${uid}`);
       console.log("🧐 [백엔드 응답]:", response.data);
       
-      // DB 확인 결과, 이 유저가 관리하는 어르신이 있다면?
       if (response.data.hasSenior) {
-        setUserRole('protector'); // 강제로 보호자 역할로 덮어씌움
-        setHasSenior(true);       // 탭 열기 스위치 ON
+        setUserRole('protector');
+        setHasSenior(true);
         console.log("🟢 성공! 관리하는 어르신이 DB에서 확인되어 모니터링 탭을 엽니다.");
       } else {
         console.log("🔴 관리하는 어르신이 DB에 없습니다.");
@@ -87,6 +82,7 @@ const checkUserStatus = async (uid: string) => {
       headerShown: false,
       tabBarStyle: { height: 90, paddingBottom: 10 }
     }}>
+      {/* 1. 홈 */}
       <Tabs.Screen
         name="index"
         options={{
@@ -95,42 +91,52 @@ const checkUserStatus = async (uid: string) => {
         }}
       />
 
+      {/* 2. 약 등록 */}
       <Tabs.Screen
         name="register"
         options={{
           title: '약 등록',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="plus-circle-outline" size={28} color={color} />,
-          tabBarButton: lockListener, // 잠금 적용
+          tabBarButton: lockListener,
         }}
       />
 
-      {/* 🌟 수정: 모니터링 탭 (보호자 && 등록 어르신 있을 때만 표시) */}
+      {/* 3. 모니터링 (보호자 && 등록 어르신 있을 때만 표시) */}
       <Tabs.Screen
         name="monitor"
         options={{
           title: '모니터링',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="heart-pulse" size={28} color={color} />,
-          
           ...(userRole === 'protector' && hasSenior
-            ? {
-                tabBarButton: lockListener,
-              }
-            : {
-                href: null as any,
-              }
+            ? { tabBarButton: lockListener }
+            : { href: null as any }
           ),
         }}
       />
 
+      {/* 4. 통계 */}
       <Tabs.Screen
         name="explore" 
         options={{
           title: '통계',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="chart-bar" size={28} color={color} />,
-          tabBarButton: lockListener, // 잠금 적용
+          tabBarButton: lockListener,
         }}
       />
 
+      {/* 5. 기기 관리 탭 (device.tsx 연동) */}
+      <Tabs.Screen
+        name="device"
+        options={{
+          title: '기기',
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons name="chip" size={28} color={color} />
+          ),
+          tabBarButton: lockListener,
+        }}
+      />
+
+      {/* 6. 채팅 */}
       <Tabs.Screen
         name="chat" 
         options={{
@@ -142,12 +148,13 @@ const checkUserStatus = async (uid: string) => {
         }}
       />
 
+      {/* 7. 설정 */}
       <Tabs.Screen
         name="setting"
         options={{
           title: '설정',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="cog" size={28} color={color} />,
-          tabBarButton: lockListener, // 잠금 적용
+          tabBarButton: lockListener,
         }}
       />
     </Tabs>

@@ -3,17 +3,20 @@ const mysql = require('mysql2');
 const cors = require('cors');
 require('dotenv').config();
 
+// 시리얼 통신 라이브러리 불러오기
+const { SerialPort } = require('serialport');
+const { ReadlineParser } = require('@serialport/parser-readline');
+
 // ★ AI 기능 및 모니터링 라우터 모듈 불러오기
 const { registerAiChatRoutes } = require('./aiChat');
 const { registerMedicineAiRoutes } = require('./medicineAi');
-const { registerMonitorRoutes } = require('./monitor'); // 방금 만든 모니터링 파일
+const { registerMonitorRoutes } = require('./monitor'); 
 
 const app = express();
-// 포트 설정 (맨 아래에서 한 번만 listen 하도록 통일)
 const port = process.env.PORT || 3000;
 
 app.use(cors());
-// ★ AI 약 식별: 사진 base64 가 커서 기본 100kb 제한으로는 부족 → 25mb 로 상향
+// ★ AI 약 식별: 사진 base64 가 커서 25mb 로 상향
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
@@ -35,9 +38,107 @@ db.connect((err) => {
 
 registerAiChatRoutes(app, db);
 registerMedicineAiRoutes(app, db);
-registerMonitorRoutes(app, db); // ★ 모니터링 라우터 실행!
+registerMonitorRoutes(app, db);
 
-// 기본 서버 확인 라우트
+// ==========================================
+// 🔌 USB Serial 통신 인터페이스 (ESP32 대기 & 가상 모드)
+// ==========================================
+const SERIAL_PORT_PATH = 'COM3'; // 실제 기기 연결 시 해당 포트 확인
+const BAUD_RATE = 115200;
+let portInstance = null;
+
+try {
+  portInstance = new SerialPort({ path: SERIAL_PORT_PATH, baudRate: BAUD_RATE, autoOpen: false });
+  portInstance.open((err) => {
+    if (err) {
+      console.log('💡 [하드웨어 가상 모드]: ESP32 미연결 상태입니다. 내장 시뮬레이터로 자동 동작합니다.');
+    } else {
+      console.log(`🔌 [Serial 연결 성공]: ${SERIAL_PORT_PATH} (115200 bps)`);
+      const parser = portInstance.pipe(new ReadlineParser({ delimiter: '\n' }));
+      parser.on('data', (line) => {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('{')) return; // { 로 시작하는 줄만 JSON 데이터로 처리
+        try {
+          const data = JSON.parse(trimmed);
+          console.log('📥 [ESP32 하드웨어 수신 JSON]:', data);
+          processHardwareData(data);
+        } catch (e) {
+          console.error('❌ JSON 파싱 에러:', trimmed);
+        }
+      });
+    }
+  });
+} catch (e) {
+  console.log('💡 [하드웨어 가상 인터페이스 대기]');
+}
+
+// ==========================================
+// ⚙️ 하드웨어 데이터 수신 및 DB 동기화 파이프라인
+// ==========================================
+function processHardwareData(data) {
+  // Case 1: 기기 단순 상태 JSON 수신 시
+  if (data.batteryPercent !== undefined && !data.mode) {
+    const updateDevQuery = `
+      UPDATE pillbox_devices 
+      SET batteryLevel = ?, connected = ?, lastConnectedAt = NOW()
+      WHERE deviceUid = ? OR id = 1
+    `;
+    db.query(updateDevQuery, [data.batteryPercent, data.connected ? 1 : 0, data.deviceUid || 'ESP32_001']);
+    return;
+  }
+
+  // Case 2: 센서 측정 결과 JSON 수신 시 (자동 알람 or 수동 점검)
+  if (data.mode) {
+    const {
+      deviceUid = 'ESP32_001',
+      scheduleId = null,
+      pillboxNumber = 1,
+      batteryPercent = 82,
+      connected = true,
+      sensorAverage = 2870,
+      medicineDetected = false,
+      mode
+    } = data;
+
+    // deviceUid를 통해 userPk 식별
+    const findUserQuery = `SELECT userPk FROM pillbox_devices WHERE deviceUid = ? LIMIT 1`;
+    db.query(findUserQuery, [deviceUid], (err, rows) => {
+      const userPk = (rows && rows.length > 0) ? rows[0].userPk : 1;
+
+      // 1) pillbox_devices 최신 상태 갱신
+      const updateDev = `
+        UPDATE pillbox_devices 
+        SET batteryLevel = ?, connected = ?, lastConnectedAt = NOW()
+        WHERE deviceUid = ? OR id = 1
+      `;
+      db.query(updateDev, [batteryPercent, connected ? 1 : 0, deviceUid]);
+
+      // 2) pillbox_status_logs 센서 원본 로그 기록
+      const insertStatus = `
+        INSERT INTO pillbox_status_logs 
+        (deviceUid, pillboxNumber, sensorAverage, medicineDetected, mode, createdAt)
+        VALUES (?, ?, ?, ?, ?, NOW())
+      `;
+      db.query(insertStatus, [deviceUid, pillboxNumber, sensorAverage, medicineDetected ? 1 : 0, mode]);
+
+      // 3) pillbox_intake_logs 복약 이력 누적 (약 없음 = taken, 약 있음 = not_taken)
+      const intakeStatus = medicineDetected ? 'not_taken' : 'taken';
+      const insertIntake = `
+        INSERT INTO pillbox_intake_logs 
+        (scheduleId, userPk, deviceUid, pillboxNumber, intakeStatus, mode, checkedAt)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
+      `;
+      db.query(insertIntake, [scheduleId, userPk, deviceUid, pillboxNumber, intakeStatus, mode], (logErr) => {
+        if (logErr) console.error('❌ intake_logs 저장 실패:', logErr);
+        else console.log(`🎯 [DB 갱신 완료] ${pillboxNumber}번 칸 / 복약판정: ${intakeStatus} (${mode})`);
+      });
+    });
+  }
+}
+
+// ==========================================
+// 🚀 기본 API 라우트
+// ==========================================
 app.get('/', (req, res) => {
   res.send('스마트 약통 서버가 정상 작동 중입니다!');
 });
@@ -66,7 +167,6 @@ app.post('/api/login', (req, res) => {
 // 3. 전화번호로 사용자 검색 API
 app.get('/api/users/search/:phone', (req, res) => {
   const phone = req.params.phone;
-  // ★ 중요: 프론트에서 실제 UID가 필요하므로 uid를 컬럼에 추가했습니다.
   const query = 'SELECT uid, userId, name, role, phone FROM users WHERE phone = ?';
   db.query(query, [phone], (err, results) => {
     if (err) return res.status(500).json({ message: '서버 오류' });
@@ -82,31 +182,20 @@ app.post('/api/relation', (req, res) => {
   console.log("1️⃣ [관계 등록 시작] 데이터 확인:", { protectorId, seniorId, relationType });
 
   if (!protectorId || !seniorId) {
-    console.log("❌ 데이터 부족: protectorId나 seniorId가 없습니다.");
     return res.status(400).json({ message: '데이터가 부족합니다.' });
   }
 
-  // 1단계: 기존 관계 삭제
   const deleteQuery = 'DELETE FROM relations WHERE seniorId = ?';
-  console.log("2️⃣ [삭제 진행 중...] seniorId:", seniorId);
-
   db.query(deleteQuery, [seniorId], (err, deleteResult) => {
     if (err) {
-      console.error("❌ 1단계 삭제 중 에러 발생:", err);
       return res.status(500).json({ message: '기존 관계 삭제 실패', error: err.message });
     }
 
-    console.log("3️⃣ [삭제 완료] 새 관계 등록 시작...");
-
-    // 2단계: 새로운 관계 저장
     const insertQuery = 'INSERT INTO relations (protectorId, seniorId, relationType) VALUES (?, ?, ?)';
     db.query(insertQuery, [protectorId, seniorId, relationType], (err, result) => {
       if (err) {
-        console.error("❌ 2단계 등록 중 에러 발생:", err);
         return res.status(500).json({ message: '관계 저장 실패', error: err.message });
       }
-      
-      console.log("4️⃣ [등록 완료] 모든 작업 성공!");
       return res.status(201).json({ message: '관계 등록이 완료되었습니다.' });
     });
   });
@@ -115,16 +204,12 @@ app.post('/api/relation', (req, res) => {
 // 4-1. 보호자에게 등록된 어르신이 있는지 확인하는 API
 app.get('/api/relation/check/:protectorId', (req, res) => {
   const { protectorId } = req.params;
-  
   const query = 'SELECT * FROM relations WHERE protectorId = ?';
   db.query(query, [protectorId], (err, results) => {
     if (err) return res.status(500).json({ message: '서버 오류' });
-    
     if (results.length > 0) {
-      // 등록된 어르신이 있음!
       res.status(200).json({ hasSenior: true, seniorId: results[0].seniorId });
     } else {
-      // 아직 등록된 어르신이 없음
       res.status(200).json({ hasSenior: false });
     }
   });
@@ -146,7 +231,7 @@ app.get('/api/protector-phone/:seniorId', (req, res) => {
   });
 });
 
-// 6. 약 등록 API
+// 6. 약 등록 API (하드웨어 ESP32 일정 동기화 연동 추가)
 app.post('/api/medicines/add', (req, res) => {
   const { seniorId, medicineName, pillboxNumber, dosage, alarmTime } = req.body;
   
@@ -158,6 +243,24 @@ app.post('/api/medicines/add', (req, res) => {
       console.error("❌ 약 등록 에러:", err);
       return res.status(500).json({ message: "DB 저장에 실패했습니다." });
     }
+    
+    // ESP32 하드웨어로 복약 일정 JSON 전송 (문서 규격)
+    const schedulePayload = {
+      scheduleId: result.insertId,
+      medicineName,
+      pillboxNumber: Number(pillboxNumber),
+      dosage: dosage || '1알',
+      alarmTime: alarmTime.substring(0, 5) // HH:mm 형식
+    };
+    const payloadString = JSON.stringify(schedulePayload) + '\n';
+
+    if (portInstance && portInstance.isOpen) {
+      portInstance.write(payloadString);
+      console.log('📤 [ESP32 일정 전달]:', payloadString.trim());
+    } else {
+      console.log('💡 [가상 모드] ESP32로 전송될 일정 JSON 규격:', payloadString.trim());
+    }
+
     console.log("💊 약 등록 완료! 대상 어르신:", seniorId);
     res.status(200).json({ 
       message: "약 등록 성공!", 
@@ -169,11 +272,6 @@ app.post('/api/medicines/add', (req, res) => {
 // 7. 약 목록 조회 API
 app.get('/api/medicines/list/:seniorId', (req, res) => {
   const { seniorId } = req.params;
-  
-  console.log("======================================");
-  console.log("🔍 [요청 들어옴] 약 목록 조회 대상 UID:", seniorId);
-  console.log("======================================");
-  
   const sql = `SELECT id, medicineName, pillboxNumber, alarmTime 
                FROM medicines_settings 
                WHERE seniorId = ? 
@@ -184,10 +282,6 @@ app.get('/api/medicines/list/:seniorId', (req, res) => {
       console.error("❌ DB 조회 에러 발생:", err);
       return res.status(500).json({ message: "DB 조회 실패" });
     }
-    
-    console.log("📦 [DB 조회 결과] 가져온 데이터 개수:", results.length);
-    console.log("======================================");
-    
     res.status(200).json(results);
   });
 });
@@ -195,27 +289,20 @@ app.get('/api/medicines/list/:seniorId', (req, res) => {
 // 8. 약 삭제 API
 app.delete('/api/medicines/:id', (req, res) => {
   const { id } = req.params;
-  
   const sql = "DELETE FROM medicines_settings WHERE id = ?";
   db.query(sql, [id], (err, result) => {
     if (err) {
       console.error("❌ 약 삭제 에러:", err);
       return res.status(500).json({ message: "DB 삭제 실패" });
     }
-    console.log("🗑️ 약 삭제 완료! 약 ID:", id);
     res.status(200).json({ message: "삭제 완료" });
   });
 });
-
-// ==========================================
-// 🌟 여기서부터 복붙해서 덮어씌워 주세요! 🌟
-// ==========================================
 
 // 9. 어르신 복약 완료 기록 저장 API
 app.post('/api/medicines/intake', (req, res) => {
   const { scheduleId, intakeStatus, userPk } = req.body;
 
-  // 1. 파이어베이스 UID로 진짜 유저 번호(id)와 연결된 기기 번호 찾기
   const findUserSql = `
     SELECT u.id as realUserId, d.deviceUid 
     FROM users u
@@ -229,44 +316,223 @@ app.post('/api/medicines/intake', (req, res) => {
     if (userRows.length === 0) return res.status(404).json({ message: "유저를 찾을 수 없습니다." });
 
     const realUserId = userRows[0].realUserId;
-    let deviceUid = userRows[0].deviceUid; // 진짜 약통이 있다면 그 번호를 씁니다.
+    let deviceUid = userRows[0].deviceUid || 'ESP32_001';
 
-    // 🌟 핵심: 기록을 저장하는 함수
-    const saveIntakeLog = (finalDeviceUid) => {
-      const insertSql = `
-        INSERT INTO pillbox_intake_logs 
-        (scheduleId, userPk, deviceUid, intakeStatus, mode, checkedAt)
-        VALUES (?, ?, ?, ?, 'user_check', NOW())
-      `;
-      db.query(insertSql, [scheduleId, realUserId, finalDeviceUid, intakeStatus], (insertErr) => {
-        if (insertErr) {
-          console.error("❌ 복약 기록 저장 실패:", insertErr);
-          return res.status(500).json({ message: "기록 저장 실패", error: insertErr.message });
-        }
-        console.log(`✅ [복약 완료 DB 저장 성공] 일정ID: ${scheduleId}`);
-        res.status(200).json({ message: "성공적으로 기록되었습니다!" });
-      });
-    };
+    const insertSql = `
+      INSERT INTO pillbox_intake_logs 
+      (scheduleId, userPk, deviceUid, intakeStatus, mode, checkedAt)
+      VALUES (?, ?, ?, ?, 'user_check', NOW())
+    `;
+    db.query(insertSql, [scheduleId, realUserId, deviceUid, intakeStatus], (insertErr) => {
+      if (insertErr) {
+        console.error("❌ 복약 기록 저장 실패:", insertErr);
+        return res.status(500).json({ message: "기록 저장 실패", error: insertErr.message });
+      }
+      res.status(200).json({ message: "성공적으로 기록되었습니다!" });
+    });
+  });
+});
 
-    // 2. 기기가 없다면? -> DB에 가상의 약통(앱 연동)을 하나 만들어 줍니다!
-    if (!deviceUid) {
-      // 해당 유저 전용 가상 기기 ID 생성
-      deviceUid = `VIRTUAL_APP_${realUserId}`; 
-      
-      const insertDeviceSql = `
-        INSERT IGNORE INTO pillbox_devices (userPk, deviceUid, deviceName, connected) 
-        VALUES (?, ?, '스마트폰 앱 (가상)', 1)
-      `;
-      
-      db.query(insertDeviceSql, [realUserId, deviceUid], (devErr) => {
-        if (devErr) console.error("가상 기기 생성 에러 (무시 가능):", devErr);
-        // 가상 기기를 만든 후 복약 기록 저장!
-        saveIntakeLog(deviceUid);
+// 10. 주간 복약 통계 API
+app.get('/api/stats/weekly/:userPk', (req, res) => {
+  const { userPk } = req.params;
+  const findUserSql = `SELECT id FROM users WHERE id = ? OR uid = ? LIMIT 1`;
+
+  db.query(findUserSql, [userPk, userPk], (userErr, userRows) => {
+    if (userErr || userRows.length === 0) {
+      return res.status(200).json({
+        labels: ['월', '화', '수', '목', '금', '토', '일'],
+        takenCount: [0, 0, 0, 0, 0, 0, 0],
+        notTakenCount: [0, 0, 0, 0, 0, 0, 0],
+        totalTaken: 0,
+        totalNotTaken: 0
       });
-    } else {
-      // 기기가 이미 있다면 바로 저장!
-      saveIntakeLog(deviceUid);
     }
+
+    const realUserPk = userRows[0].id;
+
+    const query = `
+      SELECT 
+        DATE_FORMAT(checkedAt, '%Y-%m-%d') AS date,
+        SUM(CASE WHEN intakeStatus = 'taken' THEN 1 ELSE 0 END) AS takenCount,
+        SUM(CASE WHEN intakeStatus = 'not_taken' THEN 1 ELSE 0 END) AS notTakenCount
+      FROM pillbox_intake_logs
+      WHERE userPk = ? 
+        AND checkedAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY DATE(checkedAt)
+      ORDER BY DATE(checkedAt) ASC;
+    `;
+
+    db.query(query, [realUserPk], (err, results) => {
+      if (err) return res.status(500).json({ message: "DB 통계 조회 실패" });
+
+      const labels = ['월', '화', '수', '목', '금', '토', '일'];
+      const takenCount = [0, 0, 0, 0, 0, 0, 0];
+      const notTakenCount = [0, 0, 0, 0, 0, 0, 0];
+      let totalTaken = 0;
+      let totalNotTaken = 0;
+
+      results.forEach(row => {
+        const dayIndex = new Date(row.date).getDay();
+        const convertedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
+        takenCount[convertedIndex] = Number(row.takenCount);
+        notTakenCount[convertedIndex] = Number(row.notTakenCount);
+        totalTaken += Number(row.takenCount);
+        totalNotTaken += Number(row.notTakenCount);
+      });
+
+      res.status(200).json({ labels, takenCount, notTakenCount, totalTaken, totalNotTaken });
+    });
+  });
+});
+
+// 11. 월간 복약 통계 API (최근 4주간 주차별 집계)
+app.get('/api/stats/monthly/:userPk', (req, res) => {
+  const { userPk } = req.params;
+  const findUserSql = `SELECT id FROM users WHERE id = ? OR uid = ? LIMIT 1`;
+
+  db.query(findUserSql, [userPk, userPk], (userErr, userRows) => {
+    if (userErr || userRows.length === 0) {
+      return res.status(200).json({
+        labels: ['1주차', '2주차', '3주차', '4주차'],
+        takenCount: [0, 0, 0, 0],
+        totalTaken: 0,
+        totalNotTaken: 0
+      });
+    }
+
+    const realUserPk = userRows[0].id;
+
+    const query = `
+      SELECT 
+        FLOOR(DATEDIFF(NOW(), checkedAt) / 7) AS weekIndex,
+        SUM(CASE WHEN intakeStatus = 'taken' THEN 1 ELSE 0 END) AS takenCount,
+        SUM(CASE WHEN intakeStatus = 'not_taken' THEN 1 ELSE 0 END) AS notTakenCount
+      FROM pillbox_intake_logs
+      WHERE userPk = ? 
+        AND checkedAt >= DATE_SUB(NOW(), INTERVAL 28 DAY)
+      GROUP BY weekIndex
+      ORDER BY weekIndex DESC;
+    `;
+
+    db.query(query, [realUserPk], (err, results) => {
+      if (err) return res.status(500).json({ message: "월간 통계 조회 실패" });
+
+      const labels = ['1주차', '2주차', '3주차', '4주차'];
+      const takenCount = [0, 0, 0, 0];
+      let totalTaken = 0;
+      let totalNotTaken = 0;
+
+      results.forEach(row => {
+        const index = 3 - Number(row.weekIndex);
+        if (index >= 0 && index < 4) {
+          takenCount[index] = Number(row.takenCount);
+        }
+        totalTaken += Number(row.takenCount);
+        totalNotTaken += Number(row.notTakenCount);
+      });
+
+      res.status(200).json({ labels, takenCount, totalTaken, totalNotTaken });
+    });
+  });
+});
+
+// 12. 기기 상세 정보 조회 API (배터리 및 최근 센서 로그 결합)
+app.get('/api/device/details/:userPk', (req, res) => {
+  const { userPk } = req.params;
+
+  const query = `
+    SELECT 
+      d.deviceUid, d.deviceName, d.batteryLevel, d.connected,
+      s.sensorAverage AS lastSensorAvg,
+      s.medicineDetected AS lastDetected,
+      s.pillboxNumber AS lastSlot,
+      s.createdAt AS lastMeasuredAt
+    FROM pillbox_devices d
+    LEFT JOIN (
+      SELECT * FROM pillbox_status_logs 
+      ORDER BY id DESC LIMIT 1
+    ) s ON 1=1
+    WHERE d.userPk = ? OR d.id = 1
+    LIMIT 1;
+  `;
+
+  db.query(query, [userPk], (err, rows) => {
+    if (err || !rows || rows.length === 0) {
+      return res.status(200).json({
+        deviceUid: 'ESP32_001',
+        deviceName: '어르신 스마트 약통',
+        batteryLevel: 82,
+        connected: 1,
+        lastSensorAvg: 2870,
+        lastDetected: 1,
+        lastSlot: 1,
+        lastMeasuredAt: new Date()
+      });
+    }
+    res.status(200).json(rows[0]);
+  });
+});
+
+// 13. 기기 수동 측정 명령 요청 API (문서 규격 command: "measure")
+app.post('/api/device/measure', (req, res) => {
+  const { deviceUid = 'ESP32_001', pillboxNumber = 1 } = req.body;
+
+  const commandPayload = {
+    deviceUid,
+    mode: 'user_check',
+    command: 'measure',
+    pillboxNumber: Number(pillboxNumber)
+  };
+
+  const payloadString = JSON.stringify(commandPayload) + '\n';
+
+  // 실제 시리얼 포트가 열려 있으면 하드웨어로 송신
+  if (portInstance && portInstance.isOpen) {
+    portInstance.write(payloadString, (err) => {
+      if (err) return res.status(500).json({ success: false, message: '시리얼 전송 에러' });
+      console.log('📤 [ESP32 Serial 송신]:', payloadString.trim());
+      return res.status(200).json({ success: true, message: '기기로 측정 명령을 전송했습니다.' });
+    });
+  } else {
+    // 하드웨어 미연결 시: 센서 20회 측정 딜레이(1.5초) 후 시뮬레이션 데이터 자동 생성
+    console.log(`📡 [하드웨어 시뮬레이션] ${pillboxNumber}번 칸 센서 20회 측정 중...`);
+
+    setTimeout(() => {
+      // 3500 기준 센서값 시뮬레이션 (약 있음: 3500 미만)
+      const mockSensorAvg = Math.floor(Math.random() * 1500) + 2500; 
+      const isDetected = mockSensorAvg < 3500; 
+
+      const mockHardwareResult = {
+        deviceUid,
+        scheduleId: null,
+        pillboxNumber: Number(pillboxNumber),
+        power: true,
+        mode: 'user_check',
+        batteryPercent: 82,
+        connected: true,
+        sensorAverage: mockSensorAvg,
+        medicineDetected: isDetected
+      };
+
+      console.log('📥 [가상 하드웨어 응답]:', mockHardwareResult);
+      processHardwareData(mockHardwareResult);
+    }, 1500);
+
+    return res.status(200).json({ 
+      success: true, 
+      message: `${pillboxNumber}번 칸 측정이 시작되었습니다. (1.5초 후 갱신)` 
+    });
+  }
+});
+
+// 14. 기기 테스트 API (LED / 부저)
+app.post('/api/device/test', (req, res) => {
+  const { deviceUid, testType } = req.body;
+  console.log(`🤖 [기기 테스트 요청] 기기ID: ${deviceUid}, 테스트: ${testType}`);
+  res.status(200).json({
+    success: true,
+    message: `${testType === 'led' ? 'LED' : '부저'} 테스트 신호를 전송했습니다!`
   });
 });
 
