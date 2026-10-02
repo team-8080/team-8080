@@ -2,8 +2,8 @@
 // 약 정보 등록 폼 (기존 register.tsx 의 등록 모달을 컴포넌트로 분리)
 // - 수동 등록 버튼에서도, AI 등록에서 약을 고른 뒤에도 동일하게 사용
 // - initialName 으로 약 이름을 미리 채워서 열 수 있음
-import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
 import * as Notifications from 'expo-notifications';
 import React, { useEffect, useState } from 'react';
@@ -94,6 +94,18 @@ export const MedicineFormModal = ({
           savedSetting !== null ? JSON.parse(savedSetting) : true;
 
         if (isAlertEnabled) {
+          // 1. 현재 시간과 설정한 알람 시간 객체 생성
+          const now = new Date();
+          const targetTime = new Date();
+          targetTime.setHours(hour, minute, 0, 0);
+
+          // 2. 만약 설정한 시간이 현재 시간보다 이미 과거라면, 내일로 예약 설정!
+          if (targetTime.getTime() <= now.getTime()) {
+            targetTime.setDate(targetTime.getDate() + 1);
+          }
+
+          // 3. 계산된 정확한 날짜/시간(targetTime)으로 알람 예약
+          // 3. 계산된 정확한 날짜/시간(targetTime)으로 알람 예약
           await Notifications.scheduleNotificationAsync({
             content: {
               title: '💊 스마트 약통 알림',
@@ -101,12 +113,14 @@ export const MedicineFormModal = ({
               sound: true,
             },
             trigger: {
-              hour,
-              minute,
-              repeats: true,
-              channelId: 'medicine-alarm',
-            } as any,
+              type: Notifications.SchedulableTriggerInputTypes.DATE, // ★ TS 에러 해결 (이 트리거가 '날짜' 기반임을 명시)
+              date: targetTime,
+              channelId: 'medicine-alarm', // ★ 안드로이드 알림 채널 유지
+            } as any, // ★ 기존 코드처럼 TS 엄격 검사 우회
           });
+
+          // 4. (선택사항) 만약 매일 반복되게 하려면, 위에서 1회 예약한 시점부터 24시간 주기로 반복되도록 추가 설정이 필요할 수 있습니다. 
+          // 하지만 대부분의 약 알람 앱은 매일 자정에 서버나 로컬에서 그날의 알람을 일괄 세팅(초기화)하는 방식을 더 추천합니다!
         }
 
         onClose();

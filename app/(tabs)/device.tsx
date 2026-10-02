@@ -189,8 +189,8 @@ export default function DeviceScreen() {
           </View>
 
           <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>센서 측정치 (ADC):</Text>
-            <Text style={styles.resultValue}>{device?.lastSensorAvg ?? '-'}</Text>
+            <Text style={styles.resultValue}>{device?.lastSlot ? `${String(device.lastSlot)}번 약통` : '1번 약통'}</Text>
+            <Text style={styles.resultValue}>{device?.lastSensorAvg ? String(device.lastSensorAvg) : '-'}</Text>
           </View>
 
           <View style={styles.resultRow}>

@@ -146,9 +146,18 @@ app.get('/', (req, res) => {
 // 1. 회원가입 API
 app.post('/api/signup', (req, res) => {
   const { uid, userId, password, name, phone, role } = req.body; 
+  
+  // ★ 앱에서 어떤 데이터가 넘어왔는지 터미널에 출력
+  console.log("👉 [회원가입 요청 도착]:", req.body); 
+
   const query = 'INSERT INTO users (uid, userId, password, name, phone, role) VALUES (?, ?, ?, ?, ?, ?)';
   db.query(query, [uid, userId, password, name, phone, role], (err, result) => {
-    if (err) return res.status(500).json({ message: 'DB 저장 실패', error: err.message });
+    if (err) {
+      // ★ DB 저장 실패 시 터미널에 진짜 에러 원인을 빨간 글씨로 출력!
+      console.error('❌ [DB 저장 에러 상세내용]:', err); 
+      return res.status(500).json({ message: 'DB 저장 실패', error: err.message });
+    }
+    console.log("✅ [회원가입 성공]:", userId);
     res.status(201).json({ message: '회원가입 성공!' });
   });
 });

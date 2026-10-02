@@ -42,23 +42,36 @@ export default function AuthScreen() {
         const fbUser = userCredential.user;
         console.log("Firebase 로그인 성공:", fbUser.uid);
 
-        // MySQL 서버 로그인
-        try {
+        // ★ [추가] Firebase로부터 현재 사용자의 인증 토큰(JWT) 발급받기
+        const idToken = await fbUser.getIdToken(); 
 
-          const response = await axios.post(`${SERVER_URL}/api/login`, {
-            userId: email,
-            password: password
-          });
+        // MySQL 서버 로그인 (토큰과 uid 추가 전달)
+        try {
+          const response = await axios.post(`${SERVER_URL}/api/login`, 
+            {
+              userId: email,     // 백엔드 명세에 맞춤
+              password: password, 
+              uid: fbUser.uid    // (선택) 백엔드 로직에 따라 필요할 수 있음
+            },
+            {
+              // ★ [핵심] 백엔드가 검증할 수 있도록 헤더에 토큰 실어 보내기
+              headers: {
+                Authorization: `Bearer ${idToken}` 
+              }
+            }
+          );
 
           const userData = response.data.user;
-          console.log("✅ MySQL 로그인 성공! 역할:", userData.role);
+          console.log("✅ MySQL 로그인 성공! 역할:", userData?.role);
           
           router.replace('/(tabs)'); 
-        } catch (mysqlError) {
-          console.error("❌ MySQL 로그인 실패:", mysqlError);
-          Alert.alert("로그인 오류", "등록된 사용자 정보를 찾을 수 없습니다.");
+        } catch (mysqlError: any) { // 👈 여기에 : any 를 추가합니다.
+          console.error("❌ MySQL 로그인 실패:", mysqlError.message || mysqlError);
+          // 서버에서 보낸 에러 메시지가 있다면 띄워주기
+          const serverMsg = mysqlError.response?.data?.error || "등록된 사용자 정보를 찾을 수 없습니다.";
+          Alert.alert("로그인 오류", serverMsg);
         }
-    } else {
+      } else {
         //[2] 회원가입: 하이브리드 로직 실행 
         
         // A. Firebase Auth 계정 생성 (인증용)
@@ -68,6 +81,7 @@ export default function AuthScreen() {
         // B. MySQL 서버에 사용자 정보 저장 (Node.js API 호출)
         try {
           await axios.post(`${SERVER_URL}/api/signup`, {
+            uid: user.uid,
             userId: email,
             password: password, // 실무에선 암호화 필요
             name: name,
