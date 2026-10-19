@@ -47,6 +47,24 @@ const SERIAL_PORT_PATH = 'COM3'; // 실제 기기 연결 시 해당 포트 확�
 const BAUD_RATE = 115200;
 let portInstance = null;
 
+// 아두이노로 현재 PC 시간 동기화 명령 전송 함수
+function syncHardwareTime() {
+  if (!portInstance || !portInstance.isOpen) return;
+
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const timePayload = JSON.stringify({
+    command: 'set_time',
+    currentTime: `${hh}:${mm}`
+  }) + '\n';
+
+  portInstance.write(timePayload, (err) => {
+    if (err) console.error('❌ 시간 동기화 전송 실패:', err);
+    else console.log(`⏰ [ESP32 시간 동기화 완료]: ${hh}:${mm}`);
+  });
+}
+
 try {
   portInstance = new SerialPort({ path: SERIAL_PORT_PATH, baudRate: BAUD_RATE, autoOpen: false });
   portInstance.open((err) => {
@@ -54,12 +72,28 @@ try {
       console.log('💡 [하드웨어 가상 모드]: ESP32 미연결 상태입니다. 내장 시뮬레이터로 자동 동작합니다.');
     } else {
       console.log(`🔌 [Serial 연결 성공]: ${SERIAL_PORT_PATH} (115200 bps)`);
+      
+      // ESP32 부팅 딜레이(약 1.5초) 후 PC 현재 시간 자동 동기화
+      setTimeout(syncHardwareTime, 1500);
+
       const parser = portInstance.pipe(new ReadlineParser({ delimiter: '\n' }));
       parser.on('data', (line) => {
         const trimmed = line.trim();
-        if (!trimmed.startsWith('{')) return; // { 로 시작하는 줄만 JSON 데이터로 처리
+        // { 로 시작하지 않는 텍스트 로그([SYSTEM], [BATTERY] 등)는 단순 콘솔 출력
+        if (!trimmed.startsWith('{')) {
+          console.log('📟 [ESP32 로그]:', trimmed);
+          return;
+        }
+
         try {
           const data = JSON.parse(trimmed);
+          
+          // 하드웨어 에러 메시지 수신 처리 (예: 전원 꺼짐, 측정 중 등)
+          if (data.type === 'error') {
+            console.warn(`⚠️ [ESP32 오류 응답]: 명령(${data.command}) 실패 사유: ${data.reason}`);
+            return;
+          }
+
           console.log('📥 [ESP32 하드웨어 수신 JSON]:', data);
           processHardwareData(data);
         } catch (e) {
@@ -240,7 +274,9 @@ app.get('/api/protector-phone/:seniorId', (req, res) => {
   });
 });
 
-// 6. 약 등록 API (하드웨어 ESP32 일정 동기화 연동 추가)
+// ==========================================
+// 6. 약 등록 API 수정 보강 (시간 동기화 병행)
+// ==========================================
 app.post('/api/medicines/add', (req, res) => {
   const { seniorId, medicineName, pillboxNumber, dosage, alarmTime } = req.body;
   
@@ -253,17 +289,20 @@ app.post('/api/medicines/add', (req, res) => {
       return res.status(500).json({ message: "DB 저장에 실패했습니다." });
     }
     
-    // ESP32 하드웨어로 복약 일정 JSON 전송 (문서 규격)
+    // ESP32 하드웨어로 복약 일정 JSON 전송 (정확히 HH:mm 5글자 보장)
+    const formattedTime = (alarmTime || '09:00').trim().substring(0, 5);
     const schedulePayload = {
       scheduleId: result.insertId,
       medicineName,
       pillboxNumber: Number(pillboxNumber),
       dosage: dosage || '1알',
-      alarmTime: alarmTime.substring(0, 5) // HH:mm 형식
+      alarmTime: formattedTime
     };
     const payloadString = JSON.stringify(schedulePayload) + '\n';
 
     if (portInstance && portInstance.isOpen) {
+      // 약 등록 시 현재 시간도 함께 재동기화 후 일정 전송
+      syncHardwareTime();
       portInstance.write(payloadString);
       console.log('📤 [ESP32 일정 전달]:', payloadString.trim());
     } else {
