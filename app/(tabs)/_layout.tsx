@@ -1,7 +1,7 @@
 // cd server
 // nodemon index.js
 
-// npx expo start  
+// npx expo start
 // npx expo run:android
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';

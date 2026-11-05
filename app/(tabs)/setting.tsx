@@ -221,7 +221,7 @@ export default function SettingScreen() {
     }
   };
 
-  // ★ 4. [수정됨] 설정 업데이트 함수 (알림 취소/활성화 로직 추가)
+  // ★ 4. [수정됨] 설정 업데이트 함수 (알림 취소/활성화 및 기기 제어 로직 추가)
   const toggleSetting = async (key: string, value: any) => {
     const user = auth.currentUser;
     if (!user) return;
@@ -237,10 +237,8 @@ export default function SettingScreen() {
         await AsyncStorage.setItem('phoneAlert', JSON.stringify(safeValue)); // 로컬 저장
         
         if (safeValue === false) {
-          // 알림 끄기: 기기에 등록된 모든 알람 일괄 취소
           await Notifications.cancelAllScheduledNotificationsAsync();
         } else {
-          // 알림 켜기: 안내 메시지
           Alert.alert("알림 설정", "휴대폰 알림이 켜졌습니다.\n새로 등록하는 약부터 푸시 알림이 적용됩니다.");
         }
       } catch (error) {
@@ -248,6 +246,25 @@ export default function SettingScreen() {
       }
     }
 
+    // 🔴 [추가됨] 부저 및 LED 스위치를 조작했을 때 Node.js 서버로 하드웨어 제어 명령 전송
+    if (key === 'ledEnabled' || key === 'buzzerEnabled') {
+      try {
+        const targetDevice = key === 'ledEnabled' ? 'led' : 'buzzer';
+        const commandState = safeValue ? 'on' : 'off';
+        
+        // 백엔드 서버로 하드웨어 제어 요청 (ESP32로 시리얼 명령 전달을 위함)
+        await axios.post(`${SERVER_URL}/api/hardware/control`, {
+          deviceUid: "ESP32_001", // 하드웨어 식별자
+          target: targetDevice,
+          state: commandState
+        });
+      } catch (error) {
+        console.error("하드웨어 제어 에러:", error);
+        Alert.alert("통신 오류", "기기 제어 명령을 서버에 전달하지 못했습니다.");
+      }
+    }
+
+    // DB 및 상태 업데이트
     setSettings(prev => ({ ...prev, [key]: safeValue }));
     update(ref(db, `users/${user.uid}/settings`), { [key]: safeValue });
   };

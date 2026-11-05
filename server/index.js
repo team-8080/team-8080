@@ -43,7 +43,7 @@ registerMonitorRoutes(app, db);
 // ==========================================
 // 🔌 USB Serial 통신 인터페이스 (ESP32 대기 & 가상 모드)
 // ==========================================
-const SERIAL_PORT_PATH = 'COM3'; // 실제 기기 연결 시 해당 포트 확인
+const SERIAL_PORT_PATH = 'COM4'; // 실제 기기 연결 시 해당 포트 확인
 const BAUD_RATE = 115200;
 let portInstance = null;
 
@@ -582,6 +582,28 @@ app.post('/api/device/test', (req, res) => {
     success: true,
     message: `${testType === 'led' ? 'LED' : '부저'} 테스트 신호를 전송했습니다!`
   });
+});
+
+// 앱에서 하드웨어 제어 신호를 받을 API 라우터
+app.post('/api/hardware/control', (req, res) => {
+  const { deviceUid, target, state } = req.body;
+  console.log(`📱 [앱 요청 수신]: ${target}를 ${state} 상태로 변경`);
+
+  // 시리얼 포트(COM4)가 열려있을 때만 아두이노로 데이터 전송
+  if (portInstance && portInstance.isOpen) {
+    // 예: {"command":"led","state":"on"} 형태로 줄바꿈(\n)을 포함해 전송
+    const commandString = JSON.stringify({ command: target, state: state }) + '\n';
+    
+    portInstance.write(commandString, (err) => {
+      if (err) {
+        console.error('시리얼 전송 에러:', err);
+        return res.status(500).json({ success: false, error: '시리얼 전송 실패' });
+      }
+      res.json({ success: true, message: '기기로 명령을 전송했습니다.' });
+    });
+  } else {
+    res.status(500).json({ success: false, error: '하드웨어(COM4)가 연결되어 있지 않습니다.' });
+  }
 });
 
 // 서버 실행
