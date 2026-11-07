@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios'; // ★ 추가됨
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
@@ -63,6 +64,10 @@ export default function AuthScreen() {
 
           const userData = response.data.user;
           console.log("✅ MySQL 로그인 성공! 역할:", userData?.role);
+          
+          if (userData?.id) {
+            await AsyncStorage.setItem('userPk', String(userData.id));
+          }
           
           router.replace('/(tabs)'); 
         } catch (mysqlError: any) { // 👈 여기에 : any 를 추가합니다.

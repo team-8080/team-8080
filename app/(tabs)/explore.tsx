@@ -56,7 +56,7 @@ export default function ExploreScreen() {
     const fetchAllStats = async () => {
       try {
         setLoading(true);
-        const userPk = await AsyncStorage.getItem('userPk') || '1';
+        const userPk = await AsyncStorage.getItem('userPk') || '4';
         const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';
         
         const [weeklyRes, monthlyRes] = await Promise.all([
@@ -94,14 +94,24 @@ export default function ExploreScreen() {
         
         {/* 1. 상단 요약 카드 */}
         <View style={styles.summaryRow}>
-          <SummaryCard icon="calendar-check" value="7" unit="연속 복용" color="#2196F3" />
+          <SummaryCard 
+            icon="calendar-check" 
+            value={weeklyStats ? `${weeklyStats.totalTaken}` : "0"} 
+            unit="이번 주 복용" 
+            color="#2196F3" 
+          />
           <SummaryCard 
             icon="trending-up" 
             value={weeklyStats ? `${Math.round((weeklyStats.totalTaken / ((weeklyStats.totalTaken + weeklyStats.totalNotTaken) || 1)) * 100)}%` : "0%"} 
             unit="이번 주 준수율" 
             color="#4CAF50" 
           />
-          <SummaryCard icon="trophy-outline" value="30" unit="완벽한 날" color="#FFC107" />
+          <SummaryCard 
+            icon="trophy-outline" 
+            value={monthlyStats ? `${monthlyStats.totalTaken}` : "0"} 
+            unit="누적 달성" 
+            color="#FFC107" 
+          />
         </View>
 
         {/* 2. 복약 기록 차트 (주간 / 월간 스위칭) */}
