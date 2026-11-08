@@ -1,10 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router'; // ★ 추가
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Dimensions, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { BarChart } from 'react-native-chart-kit';
 import { exploreStyles as styles } from '../../styles/exploreStyles';
+
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -51,30 +53,32 @@ export default function ExploreScreen() {
   const today = new Date();
   const dateString = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일 (오늘)`;
 
-  // 데이터 로드 (주간 & 월간 동시 호출)
-  useEffect(() => {
-    const fetchAllStats = async () => {
-      try {
-        setLoading(true);
-        const userPk = await AsyncStorage.getItem('userPk') || '4';
-        const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';
-        
-        const [weeklyRes, monthlyRes] = await Promise.all([
-          axios.get<StatsData>(`${baseUrl}/api/stats/weekly/${userPk}`),
-          axios.get<StatsData>(`${baseUrl}/api/stats/monthly/${userPk}`)
-        ]);
+// 데이터 로드 (화면이 보일 때마다 주간 & 월간 동시 호출)
+  useFocusEffect(
+    useCallback(() => {
+      const fetchAllStats = async () => {
+        try {
+          setLoading(true);
+          const userPk = await AsyncStorage.getItem('userPk') || '4';
+          const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';
+          
+          const [weeklyRes, monthlyRes] = await Promise.all([
+            axios.get<StatsData>(`${baseUrl}/api/stats/weekly/${userPk}`),
+            axios.get<StatsData>(`${baseUrl}/api/stats/monthly/${userPk}`)
+          ]);
 
-        setWeeklyStats(weeklyRes.data);
-        setMonthlyStats(monthlyRes.data);
-      } catch (error) {
-        console.error('❌ 통계 데이터 호출 실패:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+          setWeeklyStats(weeklyRes.data);
+          setMonthlyStats(monthlyRes.data);
+        } catch (error) {
+          console.error('❌ 통계 데이터 호출 실패:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
 
-    fetchAllStats();
-  }, []);
+      fetchAllStats();
+    }, [activeTab]) // 탭 상태가 바뀌거나 화면에 진입할 때마다 실행
+  );
 
   const currentStats = activeTab === 'weekly' ? weeklyStats : monthlyStats;
 
