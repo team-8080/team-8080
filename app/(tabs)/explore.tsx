@@ -1,4 +1,4 @@
-import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
@@ -148,34 +148,6 @@ export default function ExploreScreen() {
               />
             </View>
           ) : null}
-        </View>
-
-        {/* 3. 이번 달 성과 */}
-        <View style={styles.sectionCard}>
-          <Text style={[styles.sectionTitle, { marginBottom: 15 }]}>이번 달 성과</Text>
-          
-          <View style={styles.achievementBox}>
-            <FontAwesome5 name="award" size={24} color="#FFD700" />
-            <View>
-              <Text style={styles.achievementText}>완벽한 복약</Text>
-              <Text style={{ fontSize: 12, color: '#7F6D00', marginLeft: 10, marginTop: 2 }}>7일 연속 달성 중!</Text>
-            </View>
-          </View>
-
-          <View style={styles.miniStatsRow}>
-            <View style={styles.miniStatCard}>
-              <Text style={[styles.miniStatValue, { color: '#1976D2' }]}>
-                {monthlyStats ? monthlyStats.totalTaken : 0}
-              </Text>
-              <Text style={styles.miniStatLabel}>월간 복용 횟수</Text>
-            </View>
-            <View style={styles.miniStatCard}>
-              <Text style={[styles.miniStatValue, { color: '#4CAF50' }]}>
-                {monthlyStats ? (monthlyStats.totalTaken + monthlyStats.totalNotTaken) : 0}
-              </Text>
-              <Text style={styles.miniStatLabel}>월간 총 스케줄</Text>
-            </View>
-          </View>
         </View>
 
       </ScrollView>
