@@ -385,10 +385,7 @@ export default function SettingScreen() {
           </View>
           {/* 🟢 실제 알림 기능과 연동된 스위치 */}
           <SettingSwitch label="휴대폰 알림" subLabel="푸시 알림" value={settings.pushEnabled} onValueChange={(val: boolean) => toggleSetting('pushEnabled', val)} />
-          <SettingSwitch label="부저 알림" subLabel="약통 소리" value={settings.buzzerEnabled} onValueChange={(val: boolean) => toggleSetting('buzzerEnabled', val)} />
-          <SettingSwitch label="LED 표시등" subLabel="약통 불빛" value={settings.ledEnabled} onValueChange={(val: boolean) => toggleSetting('ledEnabled', val)} />
-          <SettingSwitch label="재고 알림" subLabel="잔여 개수 알림" value={settings.stockAlertEnabled} onValueChange={(val: boolean) => toggleSetting('stockAlertEnabled', val)} />
-
+        
           {settings.stockAlertEnabled && (
             <View style={styles.thresholdContainer}>
               <Text style={styles.thresholdLabel}>기준: {settings.alertThreshold}개</Text>

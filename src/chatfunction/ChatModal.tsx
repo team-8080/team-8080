@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FlatList, Modal, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 // styles 경로는 프로젝트 구조에 맞춰 수정하세요 (예: ../../styles/chatStyles)
 import { chatStyles as styles } from '../../styles/chatStyles';
 
@@ -11,17 +11,21 @@ interface Props {
 }
 
 export const ChatModal = ({ visible, onClose, users, onSend }: Props) => {
-  //console.log("모달 현재 visible 상태:", visible); // ← 이 로그가 찍히는지 보세요.
-  // 1. 에러 원인: selectedUser 상태가 정의되지 않았음
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [customText, setCustomText] = useState(''); // ★ 직접 입력 텍스트 상태
 
-  // 2. 에러 원인: phrases 배열이 정의되지 않았음
   const phrases = ["약 드실 시간이에요", "물을 많이 드세요", "식사 거르지 마세요"];
 
-  // 3. 에러 원인: handleClose 함수가 정의되지 않았음
   const handleClose = () => {
-    setSelectedUser(null); // 선택 상태 초기화
+    setSelectedUser(null);
+    setCustomText('');
     onClose();
+  };
+
+  const handleSendCustomText = () => {
+    if (!customText.trim()) return;
+    onSend(selectedUser, customText.trim());
+    handleClose();
   };
 
   return (
@@ -43,7 +47,7 @@ export const ChatModal = ({ visible, onClose, users, onSend }: Props) => {
           {!selectedUser ? (
             <FlatList
               data={users}
-              keyExtractor={(item) => item.id.toString()} // keyExtractor 추가 권장
+              keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
                 <TouchableOpacity 
                   style={styles.userItem} 
@@ -55,6 +59,7 @@ export const ChatModal = ({ visible, onClose, users, onSend }: Props) => {
             />
           ) : (
             <View style={styles.phraseContainer}>
+              {/* 기존 문구 선택 버튼 */}
               {phrases.map((msg) => (
                 <TouchableOpacity 
                   key={msg} 
@@ -67,6 +72,43 @@ export const ChatModal = ({ visible, onClose, users, onSend }: Props) => {
                   <Text style={styles.phraseText}>{msg}</Text>
                 </TouchableOpacity>
               ))}
+
+              {/* ★ [추가] 직접 입력 영역 */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginTop: 10,
+                gap: 8
+              }}>
+                <TextInput
+                  placeholder="메시지 직접 입력..."
+                  value={customText}
+                  onChangeText={setCustomText}
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor: '#333333',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    fontSize: 15,
+                    backgroundColor: '#fff'
+                  }}
+                />
+                <TouchableOpacity
+                  onPress={handleSendCustomText}
+                  style={{
+                    backgroundColor: '#2196F3',
+                    paddingHorizontal: 16,
+                    paddingVertical: 13,
+                    borderRadius: 12,
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>전송</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>

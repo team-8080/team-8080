@@ -119,13 +119,16 @@ export default function AuthScreen() {
         Alert.alert("성공", "회원가입이 완료되었습니다!");
         router.replace('/(tabs)');
       }
-    } catch (error: any) { // 여기에 : any 를 추가합니다.
-      console.error(error);
-      // 이제 error.message를 마음껏 쓸 수 있습니다.
-      Alert.alert("에러 발생", error.message || "알 수 없는 오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
+    } catch (error: any) {
+    console.error(error);
+    if (error.code === 'auth/email-already-in-use') {
+      Alert.alert("안내", "이미 가입된 이메일 계정입니다. 로그인으로 전환해주세요.");
+    } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+      Alert.alert("로그인 실패", "이메일 또는 비밀번호가 일치하지 않습니다.");
+    } else {
+      Alert.alert("오류", error.message || "알 수 없는 오류가 발생했습니다.");
     }
+  }
   };
 
   return (

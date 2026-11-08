@@ -1,4 +1,4 @@
-import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
@@ -215,33 +215,6 @@ export default function DeviceScreen() {
             </Text>
           )}
         </View>
-
-        {/* 4. 기기 하드웨어 테스트 섹션 (LED / 부저) */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>하드웨어 동작 테스트</Text>
-          <Text style={styles.sectionSub}>약통의 LED와 알람 부저가 정상 동작하는지 테스트합니다.</Text>
-
-          <View style={styles.buttonGroup}>
-            <TouchableOpacity
-              style={[styles.testBtn, { backgroundColor: '#E3F2FD' }]}
-              onPress={() => handleDeviceTest('led')}
-              disabled={testing !== null}
-            >
-              <Ionicons name="bulb-outline" size={28} color="#1976D2" />
-              <Text style={styles.btnText}>LED 점등</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.testBtn, { backgroundColor: '#FFF3E0' }]}
-              onPress={() => handleDeviceTest('buzzer')}
-              disabled={testing !== null}
-            >
-              <FontAwesome5 name="bell" size={24} color="#EF6C00" />
-              <Text style={styles.btnText}>부저 알람</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
       </ScrollView>
     </SafeAreaView>
   );
