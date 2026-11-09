@@ -89,9 +89,18 @@ export default function SeniorHomeScreen() {
         }
 
         const now = new Date();
-        const currentTimeString = now.toTimeString().split(' ')[0]; 
         const sortedMeds = [...medicines].sort((a, b) => a.alarmTime.localeCompare(b.alarmTime));
-        const upcomingMed = sortedMeds.find((med) => med.alarmTime > currentTimeString);
+
+        // 현재 시간을 분(minute) 단위로 변환 (예: 오후 6시 10분 -> 18 * 60 + 10 = 1090)
+        const currentMins = now.getHours() * 60 + now.getMinutes(); 
+
+        const upcomingMed = sortedMeds.find((med) => {
+          const [alarmHour, alarmMinute] = med.alarmTime.split(':').map(Number);
+          const alarmMins = alarmHour * 60 + alarmMinute;
+          
+          // ★ 알람 시간으로부터 30분이 지나기 전까지는 현재 약으로 취급하여 화면에 유지함
+          return alarmMins + 30 > currentMins;
+        });
 
         setNextMedicine(upcomingMed || sortedMeds[0]); // 오늘 없으면 내일 첫 약
       } catch (error) {
@@ -237,7 +246,8 @@ onPress={() => {
                     await axios.post(`${baseUrl}/api/medicines/intake`, {
                       scheduleId: nextMedicine.id, 
                       intakeStatus: 'taken',
-                      userPk: user.uid // 🌟 추가됨: 누가 먹었는지 DB에 알려주기 위한 UID
+                      userPk: user.uid, // 🌟 추가됨: 누가 먹었는지 DB에 알려주기 위한 UID
+                      pillboxNumber: nextMedicine.pillboxNumber // ★ 새로 추가됨: 몇 번 칸 약인지 서버에 전달
                     });
 
                     Alert.alert('완료', '참 잘하셨습니다! 보호자에게 전달되었습니다.');

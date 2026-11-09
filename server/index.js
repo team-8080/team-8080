@@ -151,7 +151,7 @@ function processHardwareData(data) {
       const insertStatus = `
         INSERT INTO pillbox_status_logs 
         (deviceUid, pillboxNumber, sensorAverage, medicineDetected, mode, createdAt)
-        VALUES (?, ?, ?, ?, ?, NOW())
+        VALUES (?, ?, ?, ?, ?, NOW(), 1)
       `;
       db.query(insertStatus, [deviceUid, pillboxNumber, sensorAverage, medicineDetected ? 1 : 0, mode]);
 
@@ -349,7 +349,8 @@ app.delete('/api/medicines/:id', (req, res) => {
 
 // 9. 어르신 복약 완료 기록 저장 API
 app.post('/api/medicines/intake', (req, res) => {
-  const { scheduleId, intakeStatus, userPk } = req.body;
+  // ★ req.body에서 pillboxNumber를 추가로 받아옵니다.
+  const { scheduleId, intakeStatus, userPk, pillboxNumber } = req.body;
 
   const findUserSql = `
     SELECT u.id as realUserId, d.deviceUid 
@@ -366,12 +367,15 @@ app.post('/api/medicines/intake', (req, res) => {
     const realUserId = userRows[0].realUserId;
     let deviceUid = userRows[0].deviceUid || 'ESP32_001';
 
+    // ★ INSERT 쿼리에 pillboxNumber 컬럼과 변수(?)를 추가로 넣어줍니다.
     const insertSql = `
       INSERT INTO pillbox_intake_logs 
-      (scheduleId, userPk, deviceUid, intakeStatus, mode, checkedAt)
-      VALUES (?, ?, ?, ?, 'user_check', NOW())
+      (scheduleId, userPk, deviceUid, pillboxNumber, intakeStatus, mode, checkedAt)
+      VALUES (?, ?, ?, ?, ?, 'user_check', NOW())
     `;
-    db.query(insertSql, [scheduleId, realUserId, deviceUid, intakeStatus], (insertErr) => {
+    
+    // ★ 배열 파라미터에 pillboxNumber를 추가합니다.
+    db.query(insertSql, [scheduleId, realUserId, deviceUid, pillboxNumber, intakeStatus], (insertErr) => {
       if (insertErr) {
         console.error("❌ 복약 기록 저장 실패:", insertErr);
         return res.status(500).json({ message: "기록 저장 실패", error: insertErr.message });

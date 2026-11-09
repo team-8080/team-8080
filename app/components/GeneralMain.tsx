@@ -66,13 +66,22 @@ export default function HomeScreen() {
         }
 
         const now = new Date();
-        const currentTimeString = now.toTimeString().split(' ')[0]; 
         const sortedMeds = [...medicines].sort((a, b) => a.alarmTime.localeCompare(b.alarmTime));
         
         // 🌟 전체 약 목록 저장
         setAllMedicines(sortedMeds);
 
-        const upcomingMed = sortedMeds.find((med) => med.alarmTime > currentTimeString);
+        // 현재 시간을 분(minute) 단위로 변환
+        const currentMins = now.getHours() * 60 + now.getMinutes(); 
+
+        const upcomingMed = sortedMeds.find((med) => {
+          const [alarmHour, alarmMinute] = med.alarmTime.split(':').map(Number);
+          const alarmMins = alarmHour * 60 + alarmMinute;
+          
+          // ★ 알람 시간으로부터 30분이 지나기 전까지는 현재 약으로 취급하여 화면에 유지함
+          return alarmMins + 30 > currentMins;
+        });
+        
         setNextMedicine(upcomingMed || sortedMeds[0]); // 오늘 남은 약이 없으면 내일 첫 약
       } catch (error) {
         console.error("약 데이터 불러오기 실패:", error);
@@ -150,7 +159,37 @@ export default function HomeScreen() {
               <Text style={styles.medTime}>
                 복용 시간: {nextMedicine.alarmTime.substring(0, 5)} | {nextMedicine.pillboxNumber}번 칸
               </Text>
-              <TouchableOpacity style={styles.whiteBtn}>
+              <TouchableOpacity 
+                style={styles.whiteBtn}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Alert.alert('복약 확인', `${nextMedicine.medicineName}을(를) 복용하셨습니까?`, [
+                    { text: '취소', style: 'cancel' },
+                    { 
+                      text: '확인', 
+                      onPress: async () => {
+                        try {
+                          const user = auth.currentUser;
+                          if (!user) return;
+
+                          const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+                          await axios.post(`${baseUrl}/api/medicines/intake`, {
+                            scheduleId: nextMedicine.id, 
+                            intakeStatus: 'taken',
+                            userPk: user.uid,
+                            pillboxNumber: nextMedicine.pillboxNumber // ★ 에러 방지용 칸 번호 전달
+                          });
+
+                          Alert.alert('완료', '복약 처리가 완료되었습니다.');
+                        } catch (error) {
+                          console.error('복약 기록 실패:', error);
+                          Alert.alert('오류', '기록을 저장하는 중 문제가 발생했습니다.');
+                        }
+                      }
+                    }
+                  ]);
+                }}
+              >
                 <Text style={styles.blueBtnText}>복용 확인</Text>
               </TouchableOpacity>
             </>
