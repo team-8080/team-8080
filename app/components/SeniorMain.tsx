@@ -91,22 +91,29 @@ export default function SeniorHomeScreen() {
         const now = new Date();
         const sortedMeds = [...medicines].sort((a, b) => a.alarmTime.localeCompare(b.alarmTime));
 
-        // 현재 시간을 분(minute) 단위로 변환 (예: 오후 6시 10분 -> 18 * 60 + 10 = 1090)
         const currentMins = now.getHours() * 60 + now.getMinutes(); 
+        const todayKey = now.toDateString(); // ★ 오늘 날짜 키
 
-        const upcomingMed = sortedMeds.find((med) => {
+        // ★ find 대신 비동기 for...of 사용 (이미 먹은 약 건너뛰기)
+        let upcomingMed = null;
+        for (const med of sortedMeds) {
+          const isTaken = await AsyncStorage.getItem(`taken_${med.id}_${todayKey}`);
+          if (isTaken === 'true') continue; 
+
           const [alarmHour, alarmMinute] = med.alarmTime.split(':').map(Number);
           const alarmMins = alarmHour * 60 + alarmMinute;
           
-          // ★ 알람 시간으로부터 30분이 지나기 전까지는 현재 약으로 취급하여 화면에 유지함
-          return alarmMins + 30 > currentMins;
-        });
+          if (alarmMins + 30 > currentMins) {
+            upcomingMed = med;
+            break;
+          }
+        }
 
-        setNextMedicine(upcomingMed || sortedMeds[0]); // 오늘 없으면 내일 첫 약
+        setNextMedicine(upcomingMed || sortedMeds[0]);
       } catch (error) {
         console.error("다음 약 계산 실패:", error);
       } finally {
-        setMedLoading(false); // 로딩 스피너는 최초 1회만 끄고 이후엔 조용히 갱신
+        setMedLoading(false);
       }
     };
 
@@ -240,15 +247,21 @@ onPress={() => {
                   try {
                     const user = auth.currentUser;
                     if (!user) return;
-
                     const baseUrl = process.env.EXPO_PUBLIC_API_URL;
                     
                     await axios.post(`${baseUrl}/api/medicines/intake`, {
                       scheduleId: nextMedicine.id, 
                       intakeStatus: 'taken',
-                      userPk: user.uid, // 🌟 추가됨: 누가 먹었는지 DB에 알려주기 위한 UID
-                      pillboxNumber: nextMedicine.pillboxNumber // ★ 새로 추가됨: 몇 번 칸 약인지 서버에 전달
+                      userPk: user.uid,
+                      pillboxNumber: nextMedicine.pillboxNumber 
                     });
+
+                    // ★ 복약 완료 도장 찍기
+                    const todayKey = new Date().toDateString();
+                    await AsyncStorage.setItem(`taken_${nextMedicine.id}_${todayKey}`, 'true');
+                    
+                    // ★ 화면에서 즉시 치우기
+                    setNextMedicine(null);
 
                     Alert.alert('완료', '참 잘하셨습니다! 보호자에게 전달되었습니다.');
                   } catch (error) {

@@ -65,7 +65,7 @@ export default function HomeScreen() {
           return;
         }
 
-        const now = new Date();
+const now = new Date();
         const sortedMeds = [...medicines].sort((a, b) => a.alarmTime.localeCompare(b.alarmTime));
         
         // 🌟 전체 약 목록 저장
@@ -73,14 +73,24 @@ export default function HomeScreen() {
 
         // 현재 시간을 분(minute) 단위로 변환
         const currentMins = now.getHours() * 60 + now.getMinutes(); 
+        const todayKey = now.toDateString(); // ★ 추가: 오늘 날짜 키 생성
 
-        const upcomingMed = sortedMeds.find((med) => {
+        // ★ find 대신 비동기(await) 처리가 가능한 for...of 반복문 사용
+        let upcomingMed = null;
+        for (const med of sortedMeds) {
+          // 1. 오늘 이미 복약 완료(도장 꾹) 처리한 약인지 확인
+          const isTaken = await AsyncStorage.getItem(`taken_${med.id}_${todayKey}`);
+          if (isTaken === 'true') continue; // 먹은 약이면 다음 약으로 건너뜀
+
+          // 2. 안 먹은 약이라면 30분 여유 시간 검사
           const [alarmHour, alarmMinute] = med.alarmTime.split(':').map(Number);
           const alarmMins = alarmHour * 60 + alarmMinute;
           
-          // ★ 알람 시간으로부터 30분이 지나기 전까지는 현재 약으로 취급하여 화면에 유지함
-          return alarmMins + 30 > currentMins;
-        });
+          if (alarmMins + 30 > currentMins) {
+            upcomingMed = med;
+            break; // 화면에 띄울 약을 찾았으므로 반복문 즉시 종료
+          }
+        }
         
         setNextMedicine(upcomingMed || sortedMeds[0]); // 오늘 남은 약이 없으면 내일 첫 약
       } catch (error) {
@@ -171,14 +181,21 @@ export default function HomeScreen() {
                         try {
                           const user = auth.currentUser;
                           if (!user) return;
-
                           const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+                          
                           await axios.post(`${baseUrl}/api/medicines/intake`, {
                             scheduleId: nextMedicine.id, 
                             intakeStatus: 'taken',
                             userPk: user.uid,
-                            pillboxNumber: nextMedicine.pillboxNumber // ★ 에러 방지용 칸 번호 전달
+                            pillboxNumber: nextMedicine.pillboxNumber 
                           });
+
+                          // ★ 복약 완료 도장 찍기
+                          const todayKey = new Date().toDateString();
+                          await AsyncStorage.setItem(`taken_${nextMedicine.id}_${todayKey}`, 'true');
+                          
+                          // ★ 화면에서 즉시 치우기
+                          setNextMedicine(null);
 
                           Alert.alert('완료', '복약 처리가 완료되었습니다.');
                         } catch (error) {
